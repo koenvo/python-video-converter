@@ -248,6 +248,9 @@ class TestFFMpeg(unittest.TestCase):
         self.assertEqual(['-vcodec', 'doctest', '-s', '320x240'],
                          c.parse_options({'codec': 'doctest', 'src_width': 640, 'src_height': 480, 'height': 240}))
 
+        self.assertEqual(['-vcodec', 'doctest', '-g', '25', '-keyint_min', '25', '-sc_threshold', '0'],
+                         c.parse_options({'codec': 'doctest', 'gop': 25}))
+
     def test_converter(self):
         c = Converter()
 
