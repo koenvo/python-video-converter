@@ -242,6 +242,24 @@ class TestFFMpeg(unittest.TestCase):
                          c.parse_options({'codec': 'doctest', 'src_width': 640, 'src_height': 480, 'mode': 'pad',
                                           'width': 320, 'height': 200}))
 
+        # no cropping, scale so height is correct, pad left + right
+        self.assertEqual(['-vcodec', 'doctest', '-vf', 'crop=640:480:0:0,scale=268:200,pad=320:200:26:0'],
+                         c.parse_options({'codec': 'doctest', 'src_width': 640, 'src_height': 480,
+                                          'mode': 'crop_and_pad', 'crop_ratio': 0,
+                                          'width': 320, 'height': 200}))
+
+        # half the cropping
+        self.assertEqual(['-vcodec', 'doctest', '-vf', 'crop=640:438:0:21,scale=294:200,pad=320:200:13:0'],
+                         c.parse_options({'codec': 'doctest', 'src_width': 640, 'src_height': 480,
+                                          'mode': 'crop_and_pad', 'crop_ratio': 0.5,
+                                          'width': 320, 'height': 200}))
+
+        # crop to right aspect ratio, scale to target size and no padding
+        self.assertEqual(['-vcodec', 'doctest', '-vf', 'crop=640:400:0:40,scale=320:200,pad=320:200:0:0'],
+                         c.parse_options({'codec': 'doctest', 'src_width': 640, 'src_height': 480,
+                                          'mode': 'crop_and_pad', 'crop_ratio': 1,
+                                          'width': 320, 'height': 200}))
+
         self.assertEqual(['-vcodec', 'doctest', '-s', '320x240'],
                          c.parse_options({'codec': 'doctest', 'src_width': 640, 'src_height': 480, 'width': 320}))
 

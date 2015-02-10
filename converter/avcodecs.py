@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 
 class BaseCodec(object):
     """
@@ -171,15 +172,16 @@ class VideoCodec(BaseCodec):
         'codec': str,
         'bitrate': int,
         'fps': int,
-        'width': int,
-        'height': int,
+        'width': float,
+        'height': float,
         'mode': str,
-        'src_width': int,
-        'src_height': int,
+        'crop_ratio': float,
+        'src_width': float,
+        'src_height': float,
         'gop': int,
     }
 
-    def _aspect_corrections(self, sw, sh, w, h, mode):
+    def _aspect_corrections(self, sw, sh, w, h, mode, crop_ratio=None):
         # If we don't have source info, we don't try to calculate
         # aspect corrections
         if not sw or not sh:
@@ -235,6 +237,44 @@ class VideoCodec(BaseCodec):
                 dw = (w - w1) / 2
                 return w1, h, 'pad=%d:%d:%d:0' % (w, h, dw)  # FIXED
 
+        if mode == 'crop_and_pad':
+            def _pixelate(s, low = False):
+                if low:
+                    return math.floor(s / 2.0) * 2
+                else:
+                    return math.ceil(s / 2.0) * 2
+
+            # keep original aspect ratio using crop and pad
+            new_w, new_h = sw, sh
+            new_target_w, new_target_h = w, h
+            pad_x = pad_y = 0
+            crop_x = crop_y = 0
+            if target_aspect > aspect:
+                #original image is relative heigher than target
+                # pad left/right and/or crop top/bottom
+                new_aspect = aspect + (target_aspect - aspect) * crop_ratio
+
+                crop_y = _pixelate(sh - sw / new_aspect, True)
+                new_h = sh - crop_y
+                new_target_w = _pixelate(h / new_h * sw)
+                pad_x = w - new_target_w
+            elif aspect > target_aspect:
+                new_aspect = target_aspect + (aspect - target_aspect) * crop_ratio
+
+                #reduce the width using the new aspect ratio
+                crop_x = _pixelate(sw - sh * new_aspect, True)
+                new_w = sw - crop_x
+                new_target_h = _pixelate(w / new_w * sh)
+                pad_y = h - new_target_h
+            else:
+                pass
+            _filter = "crop=%d:%d:%d:%d,scale=%d:%d,pad=%d:%d:%d:%d" % (
+                new_w, new_h, crop_x / 2, crop_y / 2,
+                new_target_w, new_target_h,
+                w, h, pad_x / 2, pad_y / 2
+            )
+            return None, None, _filter
+
         assert False, mode
 
     def parse_options(self, opt):
@@ -276,12 +316,22 @@ class VideoCodec(BaseCodec):
                 sh = None
 
         mode = 'stretch'
+        crop_ratio = 0
         if 'mode' in safe:
             if safe['mode'] in ['stretch', 'crop', 'pad']:
                 mode = safe['mode']
+            elif safe['mode'] == 'crop_and_pad' and 'crop_ratio' in safe:
+                try:
+                    crop_ratio = float(safe['crop_ratio'])
+                    if crop_ratio < 0 or crop_ratio > 1:
+                        raise ValueError
+                    mode = 'crop_and_pad'
+                except ValueError:
+                    pass
+
 
         ow, oh = w, h  # FIXED
-        w, h, filters = self._aspect_corrections(sw, sh, w, h, mode)
+        w, h, filters = self._aspect_corrections(sw, sh, w, h, mode, crop_ratio)
 
         safe['width'] = w
         safe['height'] = h
