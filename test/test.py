@@ -24,7 +24,7 @@ def verify_progress(p):
         return False
 
     prev = 0
-    for i in li:
+    for i, progress in li:
         if type(i) != int or i < 0 or i > 100:
             return False
         if i < prev:
@@ -124,9 +124,10 @@ class TestFFMpeg(unittest.TestCase):
             '-vcodec', 'libtheora', '-r', '15', '-s', '360x200', '-b', '128k']
         conv = f.convert('test1.ogg', self.video_file_path, convert_options)
 
-        last_tc = 0.0
-        for tc in conv:
-            assert (last_tc < tc <= info.format.duration + 0.1), (last_tc, tc, info.format.duration)
+        last_time = 0.0
+        for progress in conv:
+            assert (last_time < progress.time <= info.format.duration + 0.1), (last_time, progress.time, info.format.duration)
+            last_time = progress.time
 
         self._assert_converted_video_file()
 

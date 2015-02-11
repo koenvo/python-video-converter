@@ -7,6 +7,7 @@ import signal
 from subprocess import Popen, PIPE
 import logging
 import locale
+import collections
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,16 @@ console_encoding = locale.getdefaultlocale()[1] or 'UTF-8'
 class FFMpegError(Exception):
     pass
 
+class Progress(object):
+    def __init__(self, time, bitrate, size, frame=None, q=None, dup=None, drop=None, fps=None):
+        self.time = time
+        self.bitrate = bitrate
+        self.size = size
+        self.frame = frame
+        self.q = q
+        self.dup = dup
+        self.drop = drop
+        self.fps = fps
 
 class FFMpegConvertError(Exception):
     def __init__(self, message, cmd, output, details=None, pid=0):
@@ -437,7 +448,7 @@ class FFMpeg(object):
         yielded = False
         buf = ''
         total_output = ''
-        pat = re.compile(r'time=([0-9.:]+) ')
+        pat = re.compile(r'([a-z]+)=\s*([^\s]+) ')
         while True:
             if timeout:
                 signal.alarm(timeout)
@@ -455,18 +466,25 @@ class FFMpeg(object):
             buf += ret
             if '\r' in buf:
                 line, buf = buf.split('\r', 1)
-
-                tmp = pat.findall(line)
-                if len(tmp) == 1:
-                    timespec = tmp[0]
-                    if ':' in timespec:
-                        timecode = 0
-                        for part in timespec.split(':'):
-                            timecode = 60 * timecode + float(part)
-                    else:
-                        timecode = float(tmp[0])
-                    yielded = True
-                    yield timecode
+                for line in line.split('\n'):
+                    if 'time' not in line:
+                        continue
+                    tmp = pat.findall(line)
+                    if tmp:
+                        progress_dict = dict(tmp)
+                        timespec = progress_dict['time']
+                        if ':' in timespec:
+                            timecode = 0
+                            for part in timespec.split(':'):
+                                timecode = 60 * timecode + float(part)
+                        else:
+                            timecode = float(tmp[0])
+                        progress_dict['time'] = timecode
+                        yielded = True
+                        try:
+                            yield Progress(**progress_dict)
+                        except TypeError:
+                            a=1
 
         if timeout:
             signal.signal(signal.SIGALRM, signal.SIG_DFL)
